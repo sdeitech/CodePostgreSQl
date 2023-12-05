@@ -1,0 +1,49 @@
+-- FUNCTION: public.fn_iphesupdateprescriptiondiscontinuestatus()
+
+-- DROP FUNCTION IF EXISTS public.fn_iphesupdateprescriptiondiscontinuestatus();
+
+CREATE OR REPLACE FUNCTION public.fn_iphesupdateprescriptiondiscontinuestatus(
+	)
+    RETURNS void
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
+  /*
+  Created By: Sunandan
+  Created On: 2023-11-27
+  Description: Following function is used as Postgre job to update
+               the status prescription as discontinued.
+  Unit Test: Select * from fn_iphesupdateprescriptiondiscontinuestatus()
+  */
+BEGIN
+CREATE TEMPORARY TABLE tmp_tempPrescription AS
+SELECT   
+   *   
+  FROM (  
+   SELECT RANK() OVER (PARTITION BY  PD.IHEDescription_seq 
+                       ORDER BY PD.IHEResult_EntryDateTime_dt DESC) AS SnO,  
+   PD.IHEResult_PrescriptionNum_nbr,   pd.IHEResult_EntryDateTime_dt,
+   pd.IHEDescription_seq,pd.IHEDosage_Status_nbr,PD.IHEDosage_NumberOfDays,pd.id
+   FROM public.tblprescriptiondetail PD  
+   JOIN tblhealthcaresystemprescriptionelectronicsignaturestatus PES ON PD.IHEResult_PrescriptionNum_nbr=PES.PrescriptionNo    
+   JOIN tblihedescription D ON D.IHEDescription_seq = PD.IHEDescription_seq   
+   WHERE PD.IHEDosage_Status_nbr <> 6  	 
+   AND COALESCE(D.ChronicStatus,0) <> 2  
+   AND (PD.IHEDosage_NumberOfDays IS NOT NULL AND PD.IHEDosage_NumberOfDays>0)  
+   AND (PES.ApprovedDisapprovedStatus=1 OR PES.ApprovedDisapprovedStatus IS NULL  OR PES.VoidStatus IS NULL) -- SQLINES DEMO *** oved have been removed     
+  ) Prescription WHERE SnO = 1;  
+	  
+  UPDATE tblprescriptiondetail   
+  SET IHEDosage_Status_nbr = 5, IHEDosage_UpdatedBy='0', IHEDosage_UpdatedOn=NOW()  
+  FROM tblprescriptiondetail PD   
+  JOIN tmp_tempPrescription P on PD.ID=P.ID   
+  WHERE P.IHEDosage_Status_nbr <> 5  
+  AND EXTRACT(DAY FROM (NOW()::TIMESTAMP - P.IHEResult_EntryDateTime_dt::TIMESTAMP))
+  >= P.IHEDosage_NumberOfDays::numeric + 1;   
+             
+  DROP TABLE IF EXISTS tmp_tempPrescription; 
+    
+
+END
+$BODY$;

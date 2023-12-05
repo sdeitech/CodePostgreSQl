@@ -1,0 +1,32 @@
+-- FUNCTION: public.fn_getcalltype()
+
+-- DROP FUNCTION IF EXISTS public.fn_getcalltype();
+
+CREATE OR REPLACE FUNCTION public.fn_getcalltype( p_callDetails int
+	)
+    RETURNS TABLE(value integer, label character varying) 
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+    ROWS 1000
+
+AS $BODY$
+/*
+Created By: Sunandan
+Created on: 2022-10-08
+Unit Test: select * from fn_getcalltype()
+Description: The following function is used to get the details of call type 
+             eg., OUTBOUND CALL, FOLLOWUP CALL
+*/
+	begin
+	return query
+	
+select 
+distinct
+		p.id,
+		p.calltype
+from tblPatientCallType p
+where( p_callDetails = p.id or 0 = p_callDetails)
+order by p.id;
+END;
+$BODY$;
